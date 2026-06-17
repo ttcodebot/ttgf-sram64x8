@@ -1,10 +1,16 @@
-# Custom PDN configuration for the gf180 64x8 SRAM macro integration.
+# Copyright 2020-2022 Efabless Corporation
 #
-# The macro exposes its VDD/VSS power pins on Metal1/Metal2/Metal3, all clustered as
-# (mostly full-macro-width) rails along the macro's TOP edge. The macro distributes power
-# internally; externally it just needs the tile's Metal4 PDN straps to drop vias onto those
-# top-edge power rails. PDN vertical layer for gf180 (cmos5l) = Metal4, so we connect the
-# Metal4 straps DOWN to the macro's Metal3/Metal2 power pins via a dedicated macro PDN grid.
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
 source $::env(SCRIPTS_DIR)/openroad/common/set_global_connections.tcl
 set_global_connections
@@ -37,26 +43,52 @@ foreach vdd $::env(VDD_NETS) gnd $::env(GND_NETS) {
 set_voltage_domain -name CORE -power $::env(VDD_NET) -ground $::env(GND_NET) \
     -secondary_power $secondary
 
-# Allow unrepaired channels — Metal1 followpins near macro halo have no stdcells
-pdn::allow_repair_channels true
+if { $::env(PDN_MULTILAYER) == 1 } {
+    define_pdn_grid \
+        -name stdcell_grid \
+        -starts_with POWER \
+        -voltage_domain CORE \
+        -pins "$::env(PDN_VERTICAL_LAYER) $::env(PDN_HORIZONTAL_LAYER)"
 
-# Stdcell grid
-define_pdn_grid \
-    -name stdcell_grid \
-    -starts_with POWER \
-    -voltage_domain CORE \
-    -pins $::env(PDN_VERTICAL_LAYER)
+    add_pdn_stripe \
+        -grid stdcell_grid \
+        -layer $::env(PDN_VERTICAL_LAYER) \
+        -width $::env(PDN_VWIDTH) \
+        -pitch $::env(PDN_VPITCH) \
+        -offset $::env(PDN_VOFFSET) \
+        -spacing $::env(PDN_VSPACING) \
+        -starts_with POWER -extend_to_core_ring
 
-add_pdn_stripe \
-    -grid stdcell_grid \
-    -layer $::env(PDN_VERTICAL_LAYER) \
-    -width $::env(PDN_VWIDTH) \
-    -pitch $::env(PDN_VPITCH) \
-    -offset $::env(PDN_VOFFSET) \
-    -spacing $::env(PDN_VSPACING) \
-    -starts_with POWER -extend_to_core_ring
+    add_pdn_stripe \
+        -grid stdcell_grid \
+        -layer $::env(PDN_HORIZONTAL_LAYER) \
+        -width $::env(PDN_HWIDTH) \
+        -pitch $::env(PDN_HPITCH) \
+        -offset $::env(PDN_HOFFSET) \
+        -spacing $::env(PDN_HSPACING) \
+        -starts_with POWER -extend_to_core_ring
 
-# Standard cell rails on Metal1
+    add_pdn_connect \
+        -grid stdcell_grid \
+        -layers "$::env(PDN_VERTICAL_LAYER) $::env(PDN_HORIZONTAL_LAYER)"
+} else {
+    define_pdn_grid \
+        -name stdcell_grid \
+        -starts_with POWER \
+        -voltage_domain CORE \
+        -pins $::env(PDN_VERTICAL_LAYER)
+
+    add_pdn_stripe \
+        -grid stdcell_grid \
+        -layer $::env(PDN_VERTICAL_LAYER) \
+        -width $::env(PDN_VWIDTH) \
+        -pitch $::env(PDN_VPITCH) \
+        -offset $::env(PDN_VOFFSET) \
+        -spacing $::env(PDN_VSPACING) \
+        -starts_with POWER -extend_to_core_ring
+}
+
+# Adds the standard cell rails if enabled.
 if { $::env(PDN_ENABLE_RAILS) == 1 } {
     add_pdn_stripe \
         -grid stdcell_grid \
@@ -69,9 +101,28 @@ if { $::env(PDN_ENABLE_RAILS) == 1 } {
         -layers "$::env(PDN_RAIL_LAYER) $::env(PDN_VERTICAL_LAYER)"
 }
 
-# SRAM macro grid: connect the Metal4 core/stdcell straps down onto the macro's top-edge
-# power pins. The macro's Metal2 rails are full-macro-width for both nets (guaranteed strap
-# overlap); Metal3 is the topmost pin layer. Connecting Metal4 to both gives reliable vias.
+
+# Adds the core ring if enabled.
+if { $::env(PDN_CORE_RING) == 1 } {
+    if { $::env(PDN_MULTILAYER) == 1 } {
+        add_pdn_ring \
+            -allow_out_of_die \
+            -grid stdcell_grid \
+            -layers "$::env(PDN_VERTICAL_LAYER) $::env(PDN_HORIZONTAL_LAYER)" \
+            -widths "$::env(PDN_CORE_RING_VWIDTH) $::env(PDN_CORE_RING_HWIDTH)" \
+            -spacings "$::env(PDN_CORE_RING_VSPACING) $::env(PDN_CORE_RING_HSPACING)" \
+            -core_offset "$::env(PDN_CORE_RING_VOFFSET) $::env(PDN_CORE_RING_HOFFSET)"
+    } else {
+        throw APPLICATION "PDN_CORE_RING cannot be used when PDN_MULTILAYER is set to false."
+        # add_pdn_ring \
+        #     -grid stdcell_grid \
+        #     -layers "$::env(PDN_VERTICAL_LAYER)" \
+        #     -widths "$::env(PDN_CORE_RING_VWIDTH)" \
+        #     -spacings "$::env(PDN_CORE_RING_VSPACING)" \
+        #     -core_offset "$::env(PDN_CORE_RING_VOFFSET)"
+    }
+}
+
 define_pdn_grid \
     -macro \
     -default \
@@ -79,10 +130,11 @@ define_pdn_grid \
     -starts_with POWER \
     -halo "$::env(PDN_HORIZONTAL_HALO) $::env(PDN_VERTICAL_HALO)"
 
-# Connect only Metal3<->Metal4 (Via3). The macro's Metal2 power rail is only ~0.15um tall
-# (too thin to land a via), and Metal2<->Metal4 is not an adjacent via in any case. The
-# Metal3 fingers are ~2.8um tall and are internally tied to the macro's Metal1/Metal2 power,
-# so connecting a handful of fingers powers the whole net.
+# This is librelane's default tile PDN, with ONE change: the macro connect layers.
+# The gf180 64x8 SRAM exposes its VDD/VSS power pins on Metal3 (tall ~2.8um fingers at
+# its top & bottom edges), not on Metal4/Metal5 like a typical hardened macro. So connect
+# the tile's Metal4 PDN straps down to the macro's Metal3 pins (Via3) instead of the
+# default Metal4<->Metal5. The Metal3 fingers are internally bussed inside the macro.
 add_pdn_connect \
     -grid macro \
-    -layers "Metal3 Metal4"
+    -layers "Metal3 $::env(PDN_VERTICAL_LAYER)"
