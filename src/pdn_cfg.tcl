@@ -79,10 +79,10 @@ define_pdn_grid \
     -starts_with POWER \
     -halo "$::env(PDN_HORIZONTAL_HALO) $::env(PDN_VERTICAL_HALO)"
 
+# Connect only Metal3<->Metal4 (Via3). The macro's Metal2 power rail is only ~0.15um tall
+# (too thin to land a via), and Metal2<->Metal4 is not an adjacent via in any case. The
+# Metal3 fingers are ~2.8um tall and are internally tied to the macro's Metal1/Metal2 power,
+# so connecting a handful of fingers powers the whole net.
 add_pdn_connect \
     -grid macro \
     -layers "Metal3 Metal4"
-
-add_pdn_connect \
-    -grid macro \
-    -layers "Metal2 Metal4"

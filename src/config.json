@@ -54,6 +54,10 @@
     "sram VPWR VGND VDD VSS"
   ],
 
+  "//": "The macro nearly fills the tile; don't let the resizer insert per-input delay buffers",
+  "//": "(16 of them) — there is no room to legally place them in the thin side margins.",
+  "DESIGN_REPAIR_BUFFER_INPUT_PORTS": false,
+
   "//": "gf180 SRAM power pins are on Metal4 = the PDN vertical layer; stripes overlap the pins",
   "//": "and connect by net name (see pdn_cfg.tcl cmos5l branch).",
   "PDN_CFG": "dir::pdn_cfg.tcl",
@@ -78,7 +82,10 @@
   "GRT_ALLOW_CONGESTION": 1,
   "FP_IO_HLENGTH": 2,
   "FP_IO_VLENGTH": 2,
-  "FP_PDN_VPITCH": 50.0,
+  "//": "Fine vertical pitch so several Metal4 straps land on the macro's dense, irregularly",
+  "//": "spaced Metal3 power fingers (only a few solid vias per net are needed — fingers are",
+  "//": "internally bussed). 50um pitch missed nearly all fingers.",
+  "FP_PDN_VPITCH": 12.0,
   "FP_PDN_VWIDTH": 2.1,
   "RUN_CTS": 1,
   "FP_PDN_MULTILAYER": 0,
