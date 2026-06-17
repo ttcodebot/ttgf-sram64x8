@@ -17,7 +17,7 @@
       "instances": {
         "sram": {
           "location": [22.5, 4.255],
-          "orientation": "FS"
+          "orientation": "N"
         }
       },
       "gds": [
@@ -86,8 +86,8 @@
   "//": "PDN and all signal routing to the macro's bottom-edge pins. Keep the PDN sparse so",
   "//": "signals have room — a dense grid caused signal<->VPWR shorts on Metal4. Even a few",
   "//": "straps still connect the macro's (internally-bussed) Metal3 power fingers.",
-  "FP_PDN_VPITCH": 40.0,
-  "FP_PDN_VWIDTH": 1.6,
+  "FP_PDN_VPITCH": 28.0,
+  "FP_PDN_VWIDTH": 0.9,
   "RUN_CTS": 1,
   "FP_PDN_MULTILAYER": 0,
 
