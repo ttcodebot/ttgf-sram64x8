@@ -87,7 +87,15 @@
   "//": "signals have room — a dense grid caused signal<->VPWR shorts on Metal4. Even a few",
   "//": "straps still connect the macro's (internally-bussed) Metal3 power fingers.",
   "FP_PDN_VPITCH": 28.0,
-  "FP_PDN_VWIDTH": 0.9,
+  "FP_PDN_VWIDTH": 1.6,
+
+  "//": "Keep the Metal4 PDN straps OUT of the lower ~146um of the macro so that region's",
+  "//": "Metal4 is free for signal routing (the only free layer over the macro). Power straps",
+  "//": "remain in the top ~10um where they reach the frame's top-edge pins and the macro's",
+  "//": "top Metal3 power fingers; the macro buses power internally to the rest. Side margins",
+  "//": "are unobstructed so stdcell rails still get full-height straps. Obstructions are auto-",
+  "//": "removed after PDN (RemovePDNObstructions), so signals may route through the freed area.",
+  "PDN_OBSTRUCTIONS": ["Metal4 22.5 4.255 323.8 150.0"],
   "RUN_CTS": 1,
   "FP_PDN_MULTILAYER": 0,
 
