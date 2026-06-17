@@ -15,9 +15,14 @@
   "MACROS": {
     "gf180mcu_ocd_ip_sram__sram64x8m8wm1": {
       "instances": {
+        "//": "Flip vertically (FS) so the macro's signal pins — all on its bottom edge — end",
+        "//": "up at the TOP, next to the tile's top-edge I/O pins. With orientation N the",
+        "//": "signals were on the bottom edge and every net had to cross the full 152um macro",
+        "//": "height on Metal4 (the only free layer), badly congesting routing. For FS the origin",
+        "//": "maps to the macro's top-left, so location y = bbox top (4.255 + 152.21 = 156.465).",
         "sram": {
-          "location": [22.5, 4.255],
-          "orientation": "N"
+          "location": [22.5, 156.465],
+          "orientation": "FS"
         }
       },
       "gds": [
