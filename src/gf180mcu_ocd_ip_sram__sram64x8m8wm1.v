@@ -27,11 +27,11 @@
  * Description:         gf180mcu_ocd_ip_sram__sram64x8m8wm1 Black-box module
  */
 
+// NOTE: no power ports here. Like the proven IHP SRAM-on-TT integration, the macro's
+// VDD/VSS pins are connected purely physically (macro LEF + PDN_MACRO_CONNECTIONS); the
+// Verilog blackbox stays power-pin-free so the linter's generated blackbox matches the
+// wrapper instantiation (no PINMISSING on VDD/VSS).
 module gf180mcu_ocd_ip_sram__sram64x8m8wm1 (
-`ifdef USE_POWER_PINS
-	VDD,
-	VSS,
-`endif
 	CLK,
 	CEN,
 	GWEN,
@@ -48,9 +48,5 @@ input   [7:0]  	WEN;    //Write Enable
 input   [5:0]   A;
 input   [7:0]  	D;
 output	[7:0]	Q;
-`ifdef USE_POWER_PINS
-inout		VDD;
-inout		VSS;
-`endif
 
 endmodule

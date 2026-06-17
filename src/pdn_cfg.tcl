@@ -1,13 +1,10 @@
-# Custom PDN configuration for SRAM macro integration
+# Custom PDN configuration for the gf180 64x8 SRAM macro integration.
 #
-# The SRAM macro has power pins on Metal4 with Metal3 fully obstructed.
-#
-# sg13g2:  PDN vertical = TopMetal1 → macro connect Metal4↔TopMetal1
-# cmos5l:  PDN vertical = Metal4 (same as macro pins). No bridge layer available
-#          (Metal3 obstructed, TopMetal1 reserved for TT).
-#          The stdcell grid's Metal4 stripes pass through the macro's Metal4 pin
-#          gaps and physically connect by net name. We skip the macro grid and
-#          allow repair channel warnings (followpins near macro have no stdcells).
+# The macro exposes its VDD/VSS power pins on Metal1/Metal2/Metal3, all clustered as
+# (mostly full-macro-width) rails along the macro's TOP edge. The macro distributes power
+# internally; externally it just needs the tile's Metal4 PDN straps to drop vias onto those
+# top-edge power rails. PDN vertical layer for gf180 (cmos5l) = Metal4, so we connect the
+# Metal4 straps DOWN to the macro's Metal3/Metal2 power pins via a dedicated macro PDN grid.
 
 source $::env(SCRIPTS_DIR)/openroad/common/set_global_connections.tcl
 set_global_connections
@@ -72,19 +69,20 @@ if { $::env(PDN_ENABLE_RAILS) == 1 } {
         -layers "$::env(PDN_RAIL_LAYER) $::env(PDN_VERTICAL_LAYER)"
 }
 
-# SRAM macro grid — only needed when layers differ
-if { $::env(PDN_VERTICAL_LAYER) != "Metal4" } {
-    # sg13g2: macro Metal4 pins → TopMetal1 PDN stripes
-    define_pdn_grid \
-        -macro \
-        -default \
-        -name macro \
-        -starts_with POWER \
-        -halo "$::env(PDN_HORIZONTAL_HALO) $::env(PDN_VERTICAL_HALO)"
+# SRAM macro grid: connect the Metal4 core/stdcell straps down onto the macro's top-edge
+# power pins. The macro's Metal2 rails are full-macro-width for both nets (guaranteed strap
+# overlap); Metal3 is the topmost pin layer. Connecting Metal4 to both gives reliable vias.
+define_pdn_grid \
+    -macro \
+    -default \
+    -name macro \
+    -starts_with POWER \
+    -halo "$::env(PDN_HORIZONTAL_HALO) $::env(PDN_VERTICAL_HALO)"
 
-    add_pdn_connect \
-        -grid macro \
-        -layers "Metal4 $::env(PDN_VERTICAL_LAYER)"
-}
-# cmos5l: no macro grid. Metal4 PDN stripes physically overlap with macro
-# Metal4 power pins through the OBS gaps. Connection is implicit.
+add_pdn_connect \
+    -grid macro \
+    -layers "Metal3 Metal4"
+
+add_pdn_connect \
+    -grid macro \
+    -layers "Metal2 Metal4"
