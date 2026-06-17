@@ -1,0 +1,92 @@
+{
+  "//": "Tiny Tapeout 1x1 digital tile hardening for the gf180 64x8 SRAM macro.",
+  "//": "Modeled on urish/ttihp-sram-test; the macro nearly fills the tile so most settings are",
+  "//": "about fitting + connecting the macro rather than placing much logic.",
+
+  "PL_TARGET_DENSITY_PCT": 60,
+  "CLOCK_PERIOD": 20,
+  "CLOCK_PORT": "clk",
+  "PL_RESIZER_HOLD_SLACK_MARGIN": 0.1,
+  "GRT_RESIZER_HOLD_SLACK_MARGIN": 0.05,
+  "RUN_LINTER": 1,
+  "LINTER_INCLUDE_PDK_MODELS": 1,
+
+  "//": "SRAM macro integration",
+  "MACROS": {
+    "gf180mcu_ocd_ip_sram__sram64x8m8wm1": {
+      "instances": {
+        "sram": {
+          "location": [22.5, 4.255],
+          "orientation": "N"
+        }
+      },
+      "gds": [
+        "dir::../macro/gf180mcu_ocd_ip_sram__sram64x8m8wm1/gf180mcu_ocd_ip_sram__sram64x8m8wm1.gds"
+      ],
+      "lef": [
+        "dir::../macro/gf180mcu_ocd_ip_sram__sram64x8m8wm1/gf180mcu_ocd_ip_sram__sram64x8m8wm1.lef"
+      ],
+      "lib": {
+        "nom_*": [
+          "dir::../macro/gf180mcu_ocd_ip_sram__sram64x8m8wm1/gf180mcu_ocd_ip_sram__sram64x8m8wm1__tt_025C_3v30.lib"
+        ],
+        "min_*": [
+          "dir::../macro/gf180mcu_ocd_ip_sram__sram64x8m8wm1/gf180mcu_ocd_ip_sram__sram64x8m8wm1__ff_n40C_3v60.lib"
+        ],
+        "max_*": [
+          "dir::../macro/gf180mcu_ocd_ip_sram__sram64x8m8wm1/gf180mcu_ocd_ip_sram__sram64x8m8wm1__ss_125C_3v00.lib"
+        ],
+        "*": [
+          "dir::../macro/gf180mcu_ocd_ip_sram__sram64x8m8wm1/gf180mcu_ocd_ip_sram__sram64x8m8wm1__tt_025C_3v30.lib"
+        ]
+      },
+      "nl": [
+        "dir::./gf180mcu_ocd_ip_sram__sram64x8m8wm1.v"
+      ],
+      "spice": [
+        "dir::../macro/gf180mcu_ocd_ip_sram__sram64x8m8wm1/gf180mcu_ocd_ip_sram__sram64x8m8wm1.cdl"
+      ]
+    }
+  },
+
+  "//": "Connect the tile core nets (VPWR/VGND) to the macro's VDD/VSS power pins.",
+  "PDN_MACRO_CONNECTIONS": [
+    "sram VPWR VGND VDD VSS"
+  ],
+
+  "//": "gf180 SRAM power pins are on Metal4 = the PDN vertical layer; stripes overlap the pins",
+  "//": "and connect by net name (see pdn_cfg.tcl cmos5l branch).",
+  "PDN_CFG": "dir::pdn_cfg.tcl",
+
+  "//": "Macro abstraction for magic/extraction.",
+  "MAGIC_MACRO_STD_CELL_SOURCE": "PDK",
+  "MAGIC_DRC_USE_GDS": false,
+  "ERROR_ON_MAGIC_DRC": false,
+  "MAGIC_EXT_ABSTRACT_CELLS": ["gf180mcu_ocd_ip_sram__.*"],
+
+  "//": "!!! DO NOT CHANGE ANYTHING BELOW THIS POINT (TT SRAM-project conventions) !!!",
+  "RUN_KLAYOUT_XOR": 0,
+  "RUN_KLAYOUT_DRC": 0,
+  "DESIGN_REPAIR_BUFFER_OUTPUT_PORTS": 0,
+
+  "TOP_MARGIN_MULT": 1,
+  "BOTTOM_MARGIN_MULT": 1,
+  "LEFT_MARGIN_MULT": 6,
+  "RIGHT_MARGIN_MULT": 6,
+
+  "FP_SIZING": "absolute",
+  "GRT_ALLOW_CONGESTION": 1,
+  "FP_IO_HLENGTH": 2,
+  "FP_IO_VLENGTH": 2,
+  "FP_PDN_VPITCH": 50.0,
+  "FP_PDN_VWIDTH": 2.1,
+  "RUN_CTS": 1,
+  "FP_PDN_MULTILAYER": 0,
+
+  "ERROR_ON_PDN_VIOLATIONS": false,
+  "PDN_SKIPTRIM": true,
+  "RUN_IRDROP_REPORT": 0,
+  "RUN_LVS": 0,
+  "MAGIC_DEF_LABELS": 0,
+  "MAGIC_WRITE_LEF_PINONLY": 1
+}
