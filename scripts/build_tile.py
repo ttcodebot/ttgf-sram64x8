@@ -70,6 +70,11 @@ top = lib.new_cell('tt_um_ttcodebot_sram64x8')
 
 # place macro
 macrolib = gdstk.read_gds('macro/%s/%s.gds'%(MACRO,MACRO))
+# The macro GDS carries a spurious layer-0/0 boundary box (0,0)..(301.3,224.93) that is NOT a
+# real mask layer and sticks ~68um ABOVE the 160.72um tile, poking out of the PR boundary.
+# Strip all layer-0/0 shapes from every macro cell so the placed macro fits within the tile.
+for c in macrolib.cells:
+    c.filter([(0,0)], remove=True)
 macrocell = [c for c in macrolib.cells if c.name==MACRO][0]
 for c in macrolib.cells:
     lib.add(c)
