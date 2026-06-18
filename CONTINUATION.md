@@ -3,7 +3,12 @@
 Goal: hand-assemble the gf180 64x8 SRAM onto a TT **1x1** tile as a custom GDS, because
 OpenLane cannot route it (see below). Submit via the `custom_gds` TT flow.
 
-## STATUS: PRECHECK PASSED ✅ (custom-gds branch, run 27740508792) — ready to submit to ttgf0p3
+## STATUS: PRECHECK PASSED ✅ (custom-gds branch) WITH a robust PDN — ready to submit to ttgf0p3
+Power was rebuilt from a single thin link into a real grid: 6 over-macro M4 VDPWR straps (via to
+VDD M3 fingers top+bottom, gated fully-inside), ~14 VDPWR + ~10 VGND left-rail taps, ~14 VGND M1
+links to the macro VSS bottom rail. LEF declares ONLY the 2 full-height stripes as power pins
+(>=0.8um wide, within 10um of top — see precheck rule 6); the straps/links are internal geometry
+on the same net via the macro ring. No std cells: active-low controls exposed directly.
 "INFO: Precheck passed ... 🎉". gds:success, precheck:success. viewer:failure is only the
 GitHub Pages deploy (enable Pages in repo Settings -> Pages -> Source: GitHub Actions; benign).
 To submit: merge `custom-gds` -> default branch and add the repo to the ttgf0p3 shuttle.
