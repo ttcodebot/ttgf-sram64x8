@@ -9,8 +9,15 @@ OpenLane cannot route it (see below). Submit via the `custom_gds` TT flow.
   macro VSS/VDD connection. Full GDS KLayout-signoff DRC-clean (density rules only).
 - Files: src/tt_um_ttcodebot_sram64x8.gds, lef/tt_um_ttcodebot_sram64x8.lef, src/project.v
   (matches the build), info.yaml (ui_in[6]=we_n, ui_in[7] unused). CI = custom_gds@ttgf0p3.
-- Pushed branch `custom-gds`. The CI precheck (DRC+LVS+pin checks) is the authoritative sign-off.
-  If LVS needs the macro netlist: macro/ has the .cdl/.lef/.gds; may need wiring into the flow.
+- Pushed branch `custom-gds`. The CI precheck is the authoritative sign-off.
+- **Precheck requirements learned (round 1 failures, fixed):**
+  1. LEF/GDS signal pins MUST match the frame DEF dims EXACTLY: Metal4 0.30um wide x 1.0um tall
+     (DEF `-300 -1000 .. 300 1000` DBU) -> PIN_W=0.30 (not 0.44), else "Port X has different
+     dimensions ... tt_block_1x1_pgvdd.def".
+  2. project.v MUST declare the power ports `input wire VGND` and `input wire VDPWR` (lead the
+     port list, like the oscillating-bones reference), else "Power pin check: Verilog doesn't
+     contain VGND". (viewer job failure is just the GitHub Pages deploy - benign.)
+  - Next gates to watch after these: the precheck's own DRC + any LVS/macro-netlist need.
 
 ## Why custom GDS (the wall on main)
 The macro (301.3×152.2µm) fills the 1x1 tile and blocks Metal1-3 over its body. Only Metal4
