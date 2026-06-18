@@ -31,11 +31,14 @@ RUL = {
     'M1':dict(w=0.23,s=0.23),'M2':dict(w=0.28,s=0.28),
     'M3':dict(w=0.28,s=0.28),'M4':dict(w=0.23,s=0.28),
 }
-VIA = {  # cut size, metal enclosure (use the larger directional value all-around for safety)
+VIA = {  # gf180 via cuts are EXACTLY 0.26um; metal enclosure 0.05 all-around (>=0.34 width rule)
     'V1':dict(cut=0.26,enc=0.06,below='M1',above='M2'),
-    'V2':dict(cut=0.28,enc=0.05,below='M2',above='M3'),
-    'V3':dict(cut=0.28,enc=0.05,below='M3',above='M4'),
+    'V2':dict(cut=0.26,enc=0.05,below='M2',above='M3'),
+    'V3':dict(cut=0.26,enc=0.05,below='M3',above='M4'),
 }
+GRID = 0.005
+def g(v):  # snap to manufacturing grid
+    return round(round(v/GRID)*GRID, 3)
 WIRE = 0.36          # signal wire width (>= max metal min, room for via enclosure)
 TRK  = 0.66          # horizontal track pitch in the channels
 
@@ -74,6 +77,7 @@ top.add(gdstk.Reference(macrocell, (MX, MY)))
 
 # ---------- helpers ----------
 def rect(layer, x1,y1,x2,y2):
+    x1,y1,x2,y2 = g(x1),g(y1),g(x2),g(y2)
     if x2<x1: x1,x2=x2,x1
     if y2<y1: y1,y2=y2,y1
     top.add(gdstk.rectangle((x1,y1),(x2,y2), layer=L[layer][0], datatype=L[layer][1]))
@@ -84,9 +88,10 @@ def vwire(layer, xc, y1, y2, w=WIRE):
     rect(layer, xc-w/2, y1, xc+w/2, y2)
 
 def via(kind, xc, yc):
+    xc,yc = g(xc),g(yc)
     v=VIA[kind]; c=v['cut']; e=v['enc']
     half=c/2
-    top.add(gdstk.rectangle((xc-half,yc-half),(xc+half,yc+half), layer=L[kind][0], datatype=L[kind][1]))
+    top.add(gdstk.rectangle((g(xc-half),g(yc-half)),(g(xc+half),g(yc+half)), layer=L[kind][0], datatype=L[kind][1]))
     p=c/2+e
     for m in (v['below'],v['above']):
         rect(m, xc-p, yc-p, xc+p, yc+p)
