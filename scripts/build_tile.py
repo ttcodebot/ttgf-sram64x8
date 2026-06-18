@@ -288,3 +288,25 @@ for n in tie_outs:
 
 lib.write_gds('src/%s.gds'%top.name)
 print('wrote gds: macro + boundary + %d io pins + %d data nets routed'%(len(IOX),len(nets)))
+
+# ---------- LEF (abstract: top-edge Metal4 signal pins + left-edge Metal4 power stripes) ----------
+def pin_dir(name):
+    base = name.split('[')[0]
+    return {'uo_out':'OUTPUT','uio_out':'OUTPUT','uio_oe':'OUTPUT'}.get(base, 'INPUT')
+def lef_pin(name, x):
+    return ("  PIN %s\n    DIRECTION %s ;\n    USE SIGNAL ;\n    PORT\n      LAYER Metal4 ;\n"
+            "        RECT %.3f %.3f %.3f %.3f ;\n    END\n  END %s\n"
+            % (name, pin_dir(name), x-PIN_W/2, IO_Y-PIN_H/2, x+PIN_W/2, IO_Y+PIN_H/2, name))
+def lef_pwr(name, x0, x1, use):
+    return ("  PIN %s\n    DIRECTION INOUT ;\n    USE %s ;\n    PORT\n      LAYER Metal4 ;\n"
+            "        RECT %.3f %.3f %.3f %.3f ;\n    END\n  END %s\n"
+            % (name, use, x0, PWR_Y0, x1, PWR_Y1, name))
+with open('lef/%s.lef'%top.name,'w') as f:
+    f.write('VERSION 5.7 ;\nBUSBITCHARS "[]" ;\nDIVIDERCHAR "/" ;\n\n')
+    f.write('MACRO %s\n  CLASS BLOCK ;\n  FOREIGN %s 0 0 ;\n  ORIGIN 0 0 ;\n  SIZE %.3f BY %.3f ;\n'
+            % (top.name, top.name, TILE_W, TILE_H))
+    for nm in IOX: f.write(lef_pin(nm, IOX[nm]))
+    f.write(lef_pwr('VGND', 3.0, 7.0, 'GROUND'))
+    f.write(lef_pwr('VDPWR', 10.0, 14.0, 'POWER'))
+    f.write('END %s\n\nEND LIBRARY\n'%top.name)
+print('wrote lef/%s.lef'%top.name)
