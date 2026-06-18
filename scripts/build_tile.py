@@ -55,6 +55,31 @@ def pin_xc(name):
     r=[x for x in pins[name]['rects'] if x[0]=='Metal2' and x[2]<5][0]
     return (r[1]+r[3])/2 + MX
 
+# macro power rails (tile coords), parsed from the macro LEF, for net-verified PDN landings
+import re as _re
+def _macro_pwr(pin, layer):
+    blk=_re.search(r'PIN %s\b.*?END %s'%(pin,pin), open('macro/%s/%s.lef'%(MACRO,MACRO)).read(), _re.S).group(0)
+    out=[]; lay=None
+    for line in blk.splitlines():
+        m=_re.search(r'LAYER (\w+)', line);  lay=m.group(1) if m else lay
+        r=_re.search(r'RECT ([\d.]+) ([\d.]+) ([\d.]+) ([\d.]+)', line)
+        if r and lay==layer: out.append(tuple(map(float,r.groups())))
+    return [(a+MX,b+MY,c+MX,d+MY) for a,b,c,d in out]
+PWR = {(p,l): _macro_pwr(p,l) for p in ('VDD','VSS') for l in ('Metal1','Metal2','Metal3')}
+def _covers(rl, x, y):
+    return any(r[0]+0.2<=x<=r[2]-0.2 and r[1]-0.01<=y<=r[3]+0.01 for r in rl)
+def inside(pin, layer, x, y, half=0.205):
+    """True if a 2*half square via patch at (x,y) lies fully inside ONE macro pin/layer rect
+    (so it merges cleanly with no <0.28 edge to a neighbour shape)."""
+    return any(r[0]+half<=x<=r[2]-half and r[1]+half<=y<=r[3]-half for r in PWR[(pin,layer)])
+def land_y(pin, layer, x, ylo, yhi):
+    """y in [ylo,yhi] where a via patch at (x,y) lies fully inside a macro pin/layer finger."""
+    for r in PWR[(pin,layer)]:
+        if r[0]+0.21<=x<=r[2]-0.21:
+            y=max(r[1]+0.21, min((r[1]+r[3])/2, yhi));
+            if ylo<=y<=yhi and r[1]+0.21<=y<=r[3]-0.21: return round(y,3)
+    return None
+
 # TT 1x1 I/O pin x-positions (tile coords), all Metal4 at IO_Y
 IOX = {
  'clk':331.24,'ena':338.52,'rst_n':323.96,
@@ -129,23 +154,63 @@ def pwr_stripe(name, x0, x1):
 pwr_stripe('VGND',  3.0,  7.0)
 pwr_stripe('VDPWR', 10.0, 14.0)
 
-# ---------- connect stripes to macro power rails (left edge) ----------
-# Macro exposes a VSS rail (M1/M2/M3 stacked) at tile x~24.06 and a VDD rail (M2/M3) at x~25.23,
-# running up the left edge. Landings net-verified from the LEF (clean VSS-only M3 rows at the
-# macro edge at tile y 13.7..17.2; VDD M2 INT M3 at x25.23, y 8.6..12). Connectivity is verified
-# by landing net (DRC cannot catch shorts -> LVS is the final check).
-# VGND: stripe(M4) -> M3 (passes UNDER the VDPWR M4 stripe) -> merge with macro VSS M3 left rail.
-def connect_vgnd(yc):
-    via('V3', 5.0, yc)                 # VGND M4 stripe -> M3
-    hwire('M3', 5.0, 24.2, yc)         # M3 across margin, merges with macro VSS M3 (x22.7..24.3)
-# VDPWR: stripe(M4) extended OVER the macro (M4 free there; passes over VSS rail harmlessly) and
-# vias down only at the VDD rail x25.23 (clear of the VSS rail which ends at x24.62).
-def connect_vdpwr(yc):
-    hwire('M4', 12.0, 25.7, yc)        # extend VDPWR M4 to the VDD rail
-    via('V3', 25.23, yc)               # M4->M3 onto macro VDD M3 (macro bonds VDD M3<->M2 itself;
-                                       # adding our own V2 here collides with the macro's V2 -> V2.2a)
-connect_vgnd(15.05)
-connect_vdpwr(10.32)
+# ---------- PDN: connect the stripes to the macro power ring at many points ----------
+# The macro carries a full-perimeter power ring: VSS on Metal1 (left rail x~24, full-width top
+# y153.5..155.5 and bottom y5.2..7.3 rails) and VDD on Metal2/Metal3 (left rail x~25, top rails,
+# plus Metal3 fingers reaching top AND bottom edges across the width). We:
+#   (a) tie the left VGND stripe to the macro VSS Metal3 left rail at many y (M3 passes UNDER the
+#       VDPWR stripe; merges with macro VSS M3 on net-verified clean rows);
+#   (b) tie the left VDPWR stripe to the macro VDD Metal2/Metal3 left rail at many y;
+#   (c) run several real M4 VDPWR straps OVER the macro in the wide signal-free gaps, each viaing
+#       down onto a VDD Metal3 finger at the macro's TOP and BOTTOM edges (VSS is absent at those
+#       columns, so no short). All straps share the VDPWR net through the macro VDD ring + are
+#       declared as VDPWR pins so the chip M5 grid also feeds them directly.
+PWR_STRAP_W = 1.20
+vgnd_pin_rects = [(3.0, PWR_Y0, 7.0, PWR_Y1)]
+vdpwr_pin_rects = [(10.0, PWR_Y0, 14.0, PWR_Y1)]
+
+# (a) VGND left taps: only where x22.7..24.2 is solidly inside the macro VSS Metal3 left rail at
+#     yc +/- 0.2 (clean merge, no edge to a neighbour), and no VDD M3 anywhere near.
+def connect_vgnd_left(yc):
+    if all(inside('VSS','Metal3', x, yc) for x in (23.0,23.5,24.0)) and \
+       not any(_covers(PWR[('VDD','Metal3')], x, y) for x in (22.8,23.5,24.2) for y in (yc-0.3,yc+0.3)):
+        via('V3', 5.0, yc); hwire('M3', 5.0, 24.2, yc); return True
+    return False
+
+# (b) VDPWR left taps: via down onto a VDD Metal3 finger near the left rail, gated fully-inside.
+def connect_vdpwr_left(yc):
+    for x in (25.23, 25.0, 25.5, 24.8):
+        if inside('VDD','Metal3', x, yc) and not _covers(PWR[('VSS','Metal3')], x, yc):
+            hwire('M4', 12.0, x+0.45, yc); via('V3', x, yc); return True
+    return False
+
+ng=nv=0
+for yc in [round(11+5*k,2) for k in range(29)]:           # y 11..151 step 5
+    if PWR_Y0+1<yc<PWR_Y1-1:
+        if connect_vgnd_left(yc): ng+=1
+        if connect_vdpwr_left(yc): nv+=1
+print('left taps: VGND=%d VDPWR=%d'%(ng,nv))
+
+# (c) over-macro M4 VDPWR straps: scan each signal-free gap for a column where a VDD Metal3 finger
+#     fully contains the via patch at BOTH the bottom (y~5.8) and top (y~154) edges, with VSS absent.
+def strap_col(xlo, xhi):
+    x=xlo+1.1                                              # clear the gap-edge signal M4 (half 0.6 + 0.28)
+    while x<xhi-1.1:
+        yb=land_y('VDD','Metal3', x, 4.3, 8.0); yt=land_y('VDD','Metal3', x, 152.0, 156.5)
+        if yb and yt and inside('VDD','Metal3',x,yb) and inside('VDD','Metal3',x,yt) \
+           and not _covers(PWR[('VSS','Metal3')],x,5.8) and not _covers(PWR[('VSS','Metal3')],x,154.5):
+            return round(x,3), yb, yt
+        x+=0.5
+    return None
+ns=0
+for (xlo,xhi) in [(143,156),(171,200),(200,213),(222,236),(237,273),(273,308),(316,331)]:
+    r=strap_col(xlo,xhi)
+    if r:
+        x,yb,yt=r
+        vwire('M4', x, yb, yt, w=PWR_STRAP_W)
+        via('V3', x, yb); via('V3', x, yt)
+        vdpwr_pin_rects.append((x-PWR_STRAP_W/2, yb, x+PWR_STRAP_W/2, yt)); ns+=1
+print('over-macro VDPWR straps: %d'%ns)
 
 # ---------- channel router for the permutation ----------
 # Net list: (macro_pin, io_name). Data + clk are direct; control via inverters (added later).
@@ -286,6 +351,28 @@ for n in tie_outs:
     via_stack(['M2','M3','M4'], vdx, VIAUP_Y)         # M4 -> M2 at the clear column
     via('V1', vdx, VIAUP_Y)                           # M2 -> M1 collector
 
+# Extra VGND robustness: link the VGND Metal1 collector (y=VIAUP_Y) UP to the macro's full-width
+# VSS Metal1 bottom rail (y5.24..7.255) at many columns between the tie pins. Metal1->Metal1 merge
+# (no via), placed at tie-pin midpoints so the link clears every tie's M1 via pad. The bottom rail
+# is solid VSS across the macro width, so each link is a verified VGND<->VSS connection.
+# narrow macro VSS M1 features (substrate taps) sit just below the rail (~y5.0..5.24); a link that
+# comes within 0.28 of one (without overlapping) is an M1.2a, so skip columns near such features.
+# Any macro M1 in the band the link traverses below the rail (y4.3..5.24); skip a column unless
+# the link either clears every such shape by >=0.28 or sits fully inside one (clean merge).
+_m1_band = [r for r in (PWR[('VSS','Metal1')]+PWR[('VDD','Metal1')]) if r[1]<5.24 and r[3]>4.3]
+def m1_link_clear(x):
+    for r in _m1_band:
+        near = (r[0]-0.48) < x < (r[2]+0.48)
+        covers = (r[0]+0.2) <= (x-0.2) and (x+0.2) <= (r[2]-0.2)
+        if near and not covers: return False
+    return True
+mids = [round((tie_xs[i]+tie_xs[i+1])/2,3) for i in range(len(tie_xs)-1)]
+nvg=0
+for x in mids:
+    if _covers(PWR[('VSS','Metal1')], x, 6.0) and m1_link_clear(x):
+        vwire('M1', x, VIAUP_Y, 6.4); vgnd_pin_rects.append((x-0.2, VIAUP_Y, x+0.2, 6.4)); nvg+=1
+print('VGND bottom-rail links: %d'%nvg)
+
 lib.write_gds('src/%s.gds'%top.name)
 print('wrote gds: macro + boundary + %d io pins + %d data nets routed'%(len(IOX),len(nets)))
 
@@ -297,16 +384,15 @@ def lef_pin(name, x):
     return ("  PIN %s\n    DIRECTION %s ;\n    USE SIGNAL ;\n    PORT\n      LAYER Metal4 ;\n"
             "        RECT %.3f %.3f %.3f %.3f ;\n    END\n  END %s\n"
             % (name, pin_dir(name), x-PIN_W/2, IO_Y-PIN_H/2, x+PIN_W/2, IO_Y+PIN_H/2, name))
-def lef_pwr(name, x0, x1, use):
-    return ("  PIN %s\n    DIRECTION INOUT ;\n    USE %s ;\n    PORT\n      LAYER Metal4 ;\n"
-            "        RECT %.3f %.3f %.3f %.3f ;\n    END\n  END %s\n"
-            % (name, use, x0, PWR_Y0, x1, PWR_Y1, name))
+def lef_pwr(name, rects, use):
+    ports = "".join("      LAYER Metal4 ;\n        RECT %.3f %.3f %.3f %.3f ;\n"%r for r in rects)
+    return "  PIN %s\n    DIRECTION INOUT ;\n    USE %s ;\n    PORT\n%s    END\n  END %s\n" % (name, use, ports, name)
 with open('lef/%s.lef'%top.name,'w') as f:
     f.write('VERSION 5.7 ;\nBUSBITCHARS "[]" ;\nDIVIDERCHAR "/" ;\n\n')
     f.write('MACRO %s\n  CLASS BLOCK ;\n  FOREIGN %s 0 0 ;\n  ORIGIN 0 0 ;\n  SIZE %.3f BY %.3f ;\n'
             % (top.name, top.name, TILE_W, TILE_H))
     for nm in IOX: f.write(lef_pin(nm, IOX[nm]))
-    f.write(lef_pwr('VGND', 3.0, 7.0, 'GROUND'))
-    f.write(lef_pwr('VDPWR', 10.0, 14.0, 'POWER'))
+    f.write(lef_pwr('VGND',  vgnd_pin_rects,  'GROUND'))
+    f.write(lef_pwr('VDPWR', vdpwr_pin_rects, 'POWER'))
     f.write('END %s\n\nEND LIBRARY\n'%top.name)
 print('wrote lef/%s.lef'%top.name)
