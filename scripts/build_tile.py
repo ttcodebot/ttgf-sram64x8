@@ -392,7 +392,11 @@ with open('lef/%s.lef'%top.name,'w') as f:
     f.write('MACRO %s\n  CLASS BLOCK ;\n  FOREIGN %s 0 0 ;\n  ORIGIN 0 0 ;\n  SIZE %.3f BY %.3f ;\n'
             % (top.name, top.name, TILE_W, TILE_H))
     for nm in IOX: f.write(lef_pin(nm, IOX[nm]))
-    f.write(lef_pwr('VGND',  vgnd_pin_rects,  'GROUND'))
-    f.write(lef_pwr('VDPWR', vdpwr_pin_rects, 'POWER'))
+    # Only the full-height left stripes are declared as power PINS: the TT pin check requires each
+    # power port RECT to be >=0.8um wide AND reach within 10um of the top edge (frame connects power
+    # at the top). The over-macro straps + Metal1 links are internal PDN geometry on the same net
+    # (tied to the macro VDD/VSS ring, which the stripes feed) -> they don't need to be pins.
+    f.write(lef_pwr('VGND',  [(3.0,  PWR_Y0, 7.0,  PWR_Y1)], 'GROUND'))
+    f.write(lef_pwr('VDPWR', [(10.0, PWR_Y0, 14.0, PWR_Y1)], 'POWER'))
     f.write('END %s\n\nEND LIBRARY\n'%top.name)
 print('wrote lef/%s.lef'%top.name)
