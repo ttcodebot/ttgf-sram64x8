@@ -31,11 +31,13 @@ self-conflict): the TOP-net M2->M4 via-up patches (top edge y=4.10 at ystk=3.9) 
 via-up row to VIAUP_Y=3.70 (patch top 3.90, 0.355 to macro) and the 5 bottom tracks to
 BOT_Y top=3.00 at pitch BTRK=0.685 (0.30 below the via-up row). Both clearances >=0.28.
 
-**Remaining full-GDS DRC items (13: 7 M3.3 + 6 M3.2a) are MACRO-INTERNAL** (their coords map
-to macro-local positions inside the SRAM body). They are pre-existing in the
-RTimothyEdwards/gf180mcu_ocd_ip_sram IP and were invisible to OpenLane (MAGIC_DRC_USE_GDS=false
--> macro used as LEF abstract). The custom_gds CI precheck is the authoritative arbiter of
-whether vendor-macro internals are waived; we cannot/should not edit the vendor GDS.
+**The full combined GDS (macro + routing) is DRC-clean** except the 6 precheck-excluded
+density rules. Verified three ways with the KLayout signoff deck (`~/bin/klayout`, gf180mcu.drc,
+run_mode=deep): macro-alone = 6 density only; routing-alone = 7 density only; combined = 6
+density only ("DRC RESULT: FAILURE (6 violation(s))" = M1.4/M2.4/M4.4/M5.4/MT.3/PL.8). KLayout
+exits nonzero whenever ANY rule (incl. density) fires, so a nonzero exit is expected/benign.
+NOTE: reading a .lyrdb while KLayout is still writing it gives a partial/garbage count — always
+wait for true process completion before parsing.
 
 ## TODO (to finish)
 1. **Fix 1 M4-vertical collision**: D[3].ix (236.60) vs D[4].px (236.95), 0.35µm. Nudge the
