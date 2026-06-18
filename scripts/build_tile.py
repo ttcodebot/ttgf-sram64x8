@@ -239,5 +239,5 @@ def route(n):
 
 for n in nets: route(n)
 
-lib.write_gds('gds_src/%s.gds'%top.name)
+lib.write_gds('src/%s.gds'%top.name)
 print('wrote gds: macro + boundary + %d io pins + %d data nets routed'%(len(IOX),len(nets)))

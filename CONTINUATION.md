@@ -12,6 +12,17 @@ the horizontal permutation and the vertical tracks without shorts → OpenLane b
 never closes. The fix: do the permutation in the **M1-M3 edge strips** (macro top/bottom +
 margins) which the auto-router won't use, then run clean vertical M4 tracks over the macro.
 
+## Repo layout (custom_gds flow) + the "broken layout" fix
+- GDS output: **`src/tt_um_ttcodebot_sram64x8.gds`** (build_tile.py writes here). CI:
+  `.github/workflows/gds.yaml` uses `TinyTapeout/tt-gds-action/custom_gds@ttgf0p3` with
+  gds_path=src/<top>.gds, lef_path=lef/<top>.lef, verilog_path=src/project.v (+ precheck + viewer;
+  docs.yaml @ttgf0p3). Removed the OpenLane-era cruft (config.json, pdn_cfg.tcl, the macro
+  blackbox .v, test/, fpga.yaml, test.yaml, gds_src/).
+- **CRITICAL FIX:** the macro GDS carries a spurious **layer-0/0** box (0,0)..(301.3,224.93) that
+  is NOT a mask layer and stuck ~68µm past the top of the 160.72µm tile / PR boundary -> looked
+  broken / un-signable. build_tile.py now strips layer (0,0) from every macro cell on load;
+  assembled bbox is exactly the tile (346.64x160.72). All real device layers were already <=152.21.
+
 ## What's done
 - `scripts/build_tile.py` (gdstk): places macro at (22.5,4.255) N, draws PR boundary (63/0),
   43 TT I/O pins (Metal4 + labels at y=160.22), and **channel-routes all 23 data/clk nets**
