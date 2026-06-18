@@ -123,8 +123,15 @@ for i in range(8):  data_nets.append((f'Q[{i}]',  f'uo_out[{i}]'))
 data_nets.append(('CLK','clk'))
 
 # horizontal channel track y-positions (in the free margins). Two layers (M2,M3) per channel.
-BOT_Y = [round(0.55 + k*TRK, 3) for k in range(5)]          # 0.55..3.35  (below macro y=4.255)
+# Bottom margin is only 4.255um tall and must hold 5 horizontal rows PLUS the TOP-net via-up
+# row (which lifts those nets onto M4 to cross the macro). The via-up makes M2+M3 patches that
+# must clear (a) the macro's own bottom-edge metal at y=4.255 by >=0.28 and (b) the topmost
+# bottom-channel track by >=0.28. Solving both: 5 rows at pitch 0.685 topping out at y=3.00,
+# and the via-up row centered at VIAUP_Y=3.70 (patch 3.50..3.90: 0.35 to macro, 0.30 to top row).
+BTRK = 0.685
+BOT_Y = [round(0.26 + k*BTRK, 3) for k in range(5)]         # 0.26..3.00  (top row clears via-up row)
 TOP_Y = [round(157.0 + k*TRK, 3) for k in range(5)]         # 157.0..159.8 (above macro top 156.465, below IO 160.22)
+VIAUP_Y = 3.70           # TOP-net M2->M4 via-up row (bottom margin); clears macro (4.255) + top track
 MACRO_BOT = MY            # 4.255  (macro signal pins at y 4.255..7.255)
 MACRO_PIN_TOP = MY+3.0    # 7.255
 
@@ -186,7 +193,7 @@ def route(n):
     else:  # TOP
         # macro pin (M2) down into the bottom MARGIN (clear of macro M3 fingers), stack up to M4,
         # then M4 vertical over the whole macro to the top track region, horizontal to ix, to IO.
-        ystk = 3.9   # bottom margin, above BOT tracks (<=3.35), below macro (4.255)
+        ystk = VIAUP_Y   # bottom margin, above BOT tracks (<=3.00), below macro (4.255), >=0.28 each
         vwire('M2', px, ystk, MACRO_PIN_TOP)
         via_stack(['M2','M3','M4'], px, ystk)
         vwire('M4', px, ystk, y)

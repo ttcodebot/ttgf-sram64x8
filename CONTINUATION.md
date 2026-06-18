@@ -20,17 +20,22 @@ margins) which the auto-router won't use, then run clean vertical M4 tracks over
   to 0.005µm grid. Output: `gds_src/tt_um_ttcodebot_sram64x8.gds`.
 - Local KLayout signoff DRC clean except precheck-excluded density (M*.4/PL.8) — see below.
 
-## Current DRC state (data nets only, local KLayout signoff)
-Down to ~40 real violations, ALL `M3.2a` (Metal3 spacing 0.28) + a few `M2.2a` — the rest are
-precheck-excluded density. M3.3 (min-area) and via-size/off-grid are FIXED (wire/patch 0.40um,
-exact 0.26 via cut, grid snap, track pitch 0.70). The remaining M3.2a are a **packing problem
-in the ~3.5um bottom margin**: the 13 TOP-channel nets each need an M2->M4 via-up (which makes
-an isolated M3 patch) near the macro's bottom edge, and those patches crowd the 5 BOT-channel
-M3 horizontal tracks + each other. Fix ideas:
-- Route the leftmost/rightmost nets up the **22um-wide SIDE margins** (M1-M4 all free) instead
-  of the bottom channel, to relieve bottom congestion (best structural fix).
-- Or add M1 as a 3rd bottom-channel layer and reserve M3-clear lanes for the via-ups.
-- Or stagger the TOP via-up y per net so their 0.40 M3 patches don't come within 0.28.
+## Current DRC state (data nets) — ROUTING IS DRC-CLEAN
+The 23-net channel router is **DRC-clean**: DRC of the routing in isolation (top-level shapes
+only, macro reference dropped -> `/tmp/routing_only.gds`) yields only the 7 precheck-EXCLUDED
+density rules (M1.4/M2.4/M3.4/M4.4/M5.4/MT.3/PL.8). Zero real violations.
+
+Root cause of the old ~40 M3.2a/M2.2a was NOT packing (pin x-gaps are all >=2.36um, never
+self-conflict): the TOP-net M2->M4 via-up patches (top edge y=4.10 at ystk=3.9) sat only
+0.155um from the **macro's own bottom-edge metal at y=4.255**. FIX (committed): lowered the
+via-up row to VIAUP_Y=3.70 (patch top 3.90, 0.355 to macro) and the 5 bottom tracks to
+BOT_Y top=3.00 at pitch BTRK=0.685 (0.30 below the via-up row). Both clearances >=0.28.
+
+**Remaining full-GDS DRC items (13: 7 M3.3 + 6 M3.2a) are MACRO-INTERNAL** (their coords map
+to macro-local positions inside the SRAM body). They are pre-existing in the
+RTimothyEdwards/gf180mcu_ocd_ip_sram IP and were invisible to OpenLane (MAGIC_DRC_USE_GDS=false
+-> macro used as LEF abstract). The custom_gds CI precheck is the authoritative arbiter of
+whether vendor-macro internals are waived; we cannot/should not edit the vendor GDS.
 
 ## TODO (to finish)
 1. **Fix 1 M4-vertical collision**: D[3].ix (236.60) vs D[4].px (236.95), 0.35µm. Nudge the
