@@ -4,11 +4,14 @@ Goal: hand-assemble the gf180 64x8 SRAM onto a TT **1x1** tile as a custom GDS, 
 OpenLane cannot route it (see below). Submit via the `custom_gds` TT flow.
 
 ## STATUS: PRECHECK PASSED ✅ (custom-gds branch) WITH a robust PDN — ready to submit to ttgf0p3
-Power was rebuilt from a single thin link into a real grid: 6 over-macro M4 VDPWR straps (via to
-VDD M3 fingers top+bottom, gated fully-inside), ~14 VDPWR + ~10 VGND left-rail taps, ~14 VGND M1
-links to the macro VSS bottom rail. LEF declares ONLY the 2 full-height stripes as power pins
-(>=0.8um wide, within 10um of top — see precheck rule 6); the straps/links are internal geometry
-on the same net via the macro ring. No std cells: active-low controls exposed directly.
+Power is a real grid, with the over-macro straps EXPORTED AS PINS: 9 distributed full-height power
+pins (VGND x6, VDPWR x3) = two 6um left stripes + 2.2um over-macro M4 straps. VDPWR straps via to
+VDD M3 fingers (top+bottom); VGND straps via to VSS M3 (top) + bond to the VSS M1 bottom rail.
+Every strap is gated to (a) land FULLY INSIDE a macro power M3 finger (clean merge) and (b) clear
+all signal M4 columns by >=0.28um (sig_m4_x = all IO x + all macro pin x). Plus internal-only
+distribution: ~14 VDPWR + ~10 VGND left-rail taps + ~14 VGND M1 links to the VSS bottom rail (NOT
+pins — too thin/low). Precheck power-pin rule: each pin RECT needs width>=0.8um, bottom<=10um,
+top>=150.7um. No std cells: active-low controls exposed directly.
 "INFO: Precheck passed ... 🎉". gds:success, precheck:success. viewer:failure is only the
 GitHub Pages deploy (enable Pages in repo Settings -> Pages -> Source: GitHub Actions; benign).
 To submit: merge `custom-gds` -> default branch and add the repo to the ttgf0p3 shuttle.
