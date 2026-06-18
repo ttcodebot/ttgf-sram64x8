@@ -17,7 +17,17 @@ OpenLane cannot route it (see below). Submit via the `custom_gds` TT flow.
   2. project.v MUST declare the power ports `input wire VGND` and `input wire VDPWR` (lead the
      port list, like the oscillating-bones reference), else "Power pin check: Verilog doesn't
      contain VGND". (viewer job failure is just the GitHub Pages deploy - benign.)
-  - Next gates to watch after these: the precheck's own DRC + any LVS/macro-netlist need.
+  - Round 2 (after fixing 1-2): all checks pass EXCEPT three, now fixed in round 3:
+    3. PR_bndry MUST be on layer (0,0) (NOT 63/0). gf180 pr_bndry = 0/0. The boundary_check
+       (tt-support-tools precheck.py) keeps only layer (0,0) and requires
+       PR_bndry.bbox == top.bbox -> draw the tile boundary on (0,0) exactly = (0,0)..(346.64,160.72).
+    4. "Shapes outside project area" = a consequence of (3); fixed once PR_bndry is on (0,0)
+       and nothing extends beyond it (it doesn't).
+    5. "DBU: 1 violation" = wrong database unit. Write the GDS at precision 1e-9 (1nm DBU, the
+       gf180 standard; the macro is 1e-9) NOT 1e-12. 0.005um grid = 5 DBU, still exact.
+  - **The custom_gds precheck has NO LVS step** (checks: pin-label-overlap, zero-area, KLayout
+    PR_bndry, pin, boundary, power-pin, layer, cell-name, gf180 DRC, antenna, analog-pin,
+    verilog-syntax). So no macro netlist is needed. After (3)-(5), expect a full PASS.
 
 ## Why custom GDS (the wall on main)
 The macro (301.3×152.2µm) fills the 1x1 tile and blocks Metal1-3 over its body. Only Metal4

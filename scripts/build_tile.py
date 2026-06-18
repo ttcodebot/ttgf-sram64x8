@@ -24,7 +24,7 @@ L = {
     'M1lab':(34,10),'M4lab':(46,10),
     'PRbnd':(0,0),   # PR boundary placeholder (set below)
 }
-PRBND = (63,0)   # gf180 PR_bndry
+PRBND = (0,0)    # gf180 PR_bndry is layer 0/0 (precheck KLayout check + boundary check use it)
 
 # --- design rules (um) ---
 RUL = {
@@ -65,7 +65,7 @@ IOX = {
  **{f'uio_oe[{i}]':x for i,x in enumerate([83.72,76.44,69.16,61.88,54.60,47.32,40.04,32.76])},
 }
 
-lib = gdstk.Library(name='ttsram', unit=1e-6, precision=1e-12)
+lib = gdstk.Library(name='ttsram', unit=1e-6, precision=1e-9)  # 1nm DBU (gf180 standard; 0.005um grid = 5 DBU)
 top = lib.new_cell('tt_um_ttcodebot_sram64x8')
 
 # place macro
