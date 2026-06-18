@@ -3,6 +3,15 @@
 Goal: hand-assemble the gf180 64x8 SRAM onto a TT **1x1** tile as a custom GDS, because
 OpenLane cannot route it (see below). Submit via the `custom_gds` TT flow.
 
+## STATUS (current): connectivity-complete + DRC-clean; CI precheck is the remaining gate
+- All 23 data/clk nets routed; controls connected (GWEN<-ui_in[6] active-low on an M1 lane;
+  CEN=0, WEN[0:7]=0 tied to macro VSS); uio_out/uio_oe=0 tied; power VDPWR/VGND stripes +
+  macro VSS/VDD connection. Full GDS KLayout-signoff DRC-clean (density rules only).
+- Files: src/tt_um_ttcodebot_sram64x8.gds, lef/tt_um_ttcodebot_sram64x8.lef, src/project.v
+  (matches the build), info.yaml (ui_in[6]=we_n, ui_in[7] unused). CI = custom_gds@ttgf0p3.
+- Pushed branch `custom-gds`. The CI precheck (DRC+LVS+pin checks) is the authoritative sign-off.
+  If LVS needs the macro netlist: macro/ has the .cdl/.lef/.gds; may need wiring into the flow.
+
 ## Why custom GDS (the wall on main)
 The macro (301.3×152.2µm) fills the 1x1 tile and blocks Metal1-3 over its body. Only Metal4
 is free above it; Metal5 is reserved (TT `RT_MAX_LAYER=Metal4`). The macro's physical pin
