@@ -356,7 +356,17 @@ MACRO tt_um_ttcodebot_sram64x8
     USE GROUND ;
     PORT
       LAYER Metal4 ;
-        RECT 3.000 5.000 7.000 155.720 ;
+        RECT 2.500 5.000 8.500 155.720 ;
+      LAYER Metal4 ;
+        RECT 143.300 6.000 145.500 155.400 ;
+      LAYER Metal4 ;
+        RECT 171.800 6.000 174.000 155.400 ;
+      LAYER Metal4 ;
+        RECT 200.800 6.000 203.000 155.400 ;
+      LAYER Metal4 ;
+        RECT 229.800 6.000 232.000 155.400 ;
+      LAYER Metal4 ;
+        RECT 288.050 6.000 290.250 155.400 ;
     END
   END VGND
   PIN VDPWR
@@ -364,7 +374,11 @@ MACRO tt_um_ttcodebot_sram64x8
     USE POWER ;
     PORT
       LAYER Metal4 ;
-        RECT 10.000 5.000 14.000 155.720 ;
+        RECT 11.000 5.000 17.000 155.720 ;
+      LAYER Metal4 ;
+        RECT 251.800 5.755 254.000 155.065 ;
+      LAYER Metal4 ;
+        RECT 317.300 5.755 319.500 155.065 ;
     END
   END VDPWR
 END tt_um_ttcodebot_sram64x8
