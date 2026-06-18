@@ -3,7 +3,12 @@
 Goal: hand-assemble the gf180 64x8 SRAM onto a TT **1x1** tile as a custom GDS, because
 OpenLane cannot route it (see below). Submit via the `custom_gds` TT flow.
 
-## STATUS (current): connectivity-complete + DRC-clean; CI precheck is the remaining gate
+## STATUS: PRECHECK PASSED ✅ (custom-gds branch, run 27740508792) — ready to submit to ttgf0p3
+"INFO: Precheck passed ... 🎉". gds:success, precheck:success. viewer:failure is only the
+GitHub Pages deploy (enable Pages in repo Settings -> Pages -> Source: GitHub Actions; benign).
+To submit: merge `custom-gds` -> default branch and add the repo to the ttgf0p3 shuttle.
+
+## (earlier) connectivity-complete + DRC-clean
 - All 23 data/clk nets routed; controls connected (GWEN<-ui_in[6] active-low on an M1 lane;
   CEN=0, WEN[0:7]=0 tied to macro VSS); uio_out/uio_oe=0 tied; power VDPWR/VGND stripes +
   macro VSS/VDD connection. Full GDS KLayout-signoff DRC-clean (density rules only).
