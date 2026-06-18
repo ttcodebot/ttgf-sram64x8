@@ -114,6 +114,34 @@ def io_pin(name):
     top.add(gdstk.Label(name,(x,IO_Y), layer=L['M4pin'][0], texttype=L['M4pin'][1]))
 for nm in IOX: io_pin(nm)
 
+# ---------- power pins (Metal4 left-edge stripes, gf180 TT convention) ----------
+# From the gf180 oscillating-bones port LEF: VGND = M4 x3..7, VDPWR = M4 x10..14, full height.
+# Both sit in this tile's empty LEFT margin (x<22.5). The chip frame connects to them via M5.
+PWR_Y0, PWR_Y1 = 5.0, TILE_H-5.0
+def pwr_stripe(name, x0, x1):
+    rect('M4', x0, PWR_Y0, x1, PWR_Y1)
+    top.add(gdstk.Label(name,((x0+x1)/2,(PWR_Y0+PWR_Y1)/2), layer=L['M4pin'][0], texttype=L['M4pin'][1]))
+pwr_stripe('VGND',  3.0,  7.0)
+pwr_stripe('VDPWR', 10.0, 14.0)
+
+# ---------- connect stripes to macro power rails (left edge) ----------
+# Macro exposes a VSS rail (M1/M2/M3 stacked) at tile x~24.06 and a VDD rail (M2/M3) at x~25.23,
+# running up the left edge. Landings net-verified from the LEF (clean VSS-only M3 rows at the
+# macro edge at tile y 13.7..17.2; VDD M2 INT M3 at x25.23, y 8.6..12). Connectivity is verified
+# by landing net (DRC cannot catch shorts -> LVS is the final check).
+# VGND: stripe(M4) -> M3 (passes UNDER the VDPWR M4 stripe) -> merge with macro VSS M3 left rail.
+def connect_vgnd(yc):
+    via('V3', 5.0, yc)                 # VGND M4 stripe -> M3
+    hwire('M3', 5.0, 24.2, yc)         # M3 across margin, merges with macro VSS M3 (x22.7..24.3)
+# VDPWR: stripe(M4) extended OVER the macro (M4 free there; passes over VSS rail harmlessly) and
+# vias down only at the VDD rail x25.23 (clear of the VSS rail which ends at x24.62).
+def connect_vdpwr(yc):
+    hwire('M4', 12.0, 25.7, yc)        # extend VDPWR M4 to the VDD rail
+    via('V3', 25.23, yc)               # M4->M3 onto macro VDD M3 (macro bonds VDD M3<->M2 itself;
+                                       # adding our own V2 here collides with the macro's V2 -> V2.2a)
+connect_vgnd(15.05)
+connect_vdpwr(10.32)
+
 # ---------- channel router for the permutation ----------
 # Net list: (macro_pin, io_name). Data + clk are direct; control via inverters (added later).
 data_nets = []

@@ -39,6 +39,56 @@ exits nonzero whenever ANY rule (incl. density) fires, so a nonzero exit is expe
 NOTE: reading a .lyrdb while KLayout is still writing it gives a partial/garbage count — always
 wait for true process completion before parsing.
 
+## RESOLVED: gf180 power convention (from the gf180 oscillating-bones port LEF)
+Power is exposed as full-height **Metal4 vertical stripes at the LEFT edge** + a label:
+- **VGND**  : Metal4 RECT x 3..7   (4um wide), y ~5..top, USE GROUND
+- **VDPWR** : Metal4 RECT x 10..14 (4um wide), y ~5..top, USE POWER  (digital 3.3V; name VDPWR not VPWR)
+Both fit in this tile's empty LEFT margin (x 0..22.5, left of the macro). The chip frame
+connects to these at integration (Metal5 over them). Place the 2 control inverters in the same
+left margin (x ~16..21) right beside the stripes so their M1 VDD/VSS rails via straight up to
+VDPWR/VGND. Macro power: VSS has full-width M1/M2 perimeter rails incl. a bottom rail at tile
+y~5.24..7.255 (macro-local 0.985..3.0) and a left rail at tile x~23.5..25.5; VDD has M2 rails +
+M3 fingers (M3 fingers are at the macro TOP edge y~153.6..156.46, M2 rails at bottom). Bridge
+VGND stripe -> macro VSS and VDPWR stripe -> macro VDD with short M4 jogs + via stacks landing
+on those rails (M4 is free over the macro for the jog; land vias on a same-net rail to avoid
+shorting macro signals).
+
+## DONE: power stripes + macro power connection (in build_tile.py)
+- VGND M4 stripe x3..7, VDPWR M4 x10..14, full height (y5..155.72) + labels. DRC-clean (empty
+  left margin). Macro connection (net-verified from LEF, connectivity confirmed by overlap test
+  -- DRC can't catch shorts, LVS is final):
+  - VGND: via V3 at (5,15.05) [M4->M3], M3 hwire x5..24.2 @ y15.05 -> merges with macro VSS M3
+    left rail (clean VSS-only M3 rows exist at tile y 13.7..17.2; the M3 passes UNDER the VDPWR
+    M4 stripe -- different layer, no short).
+  - VDPWR: M4 hwire x12..25.7 @ y10.32 (over macro, M4 free) + via V3 at (25.23,10.32) [M4->M3]
+    onto macro VDD M3. **Do NOT add a V2 there** -- the macro already bonds its VDD M3<->M2 with
+    its own V2 vias; adding ours collides => V2.2a. Landing on macro M3 alone is sufficient.
+- Inverters will also tie their M1 VDD/VSS rails to these stripes (place them adjacent in the
+  left margin). For current robustness, can add more VGND/VDPWR taps up the rails later.
+
+## Output ties (uio_out/uio_oe = 0) -- approach note
+The macro VSS top rail is NOT cleanly M1&M2&M3 at every output-pin x (checked: x 32.76/54.6/61.88
+clean @ y154.4, but 40/47/69/76/83 not). So do NOT drop each of the 16 pins straight onto the
+macro VSS at its own x. Instead run a short VGND collector (M3 or M2) in the top margin from a
+verified-clean VSS landing (or from the VGND M4 stripe) and tie the 16 pins to it. uio_oe=0 makes
+the pin an input so uio_out is don't-care, but LVS still needs both nets connected -> tie both.
+
+## Simplification: control logic
+WEN[0:7] are spread x 33..311 (full width). Instead of one 9-sink GWEN+WEN net, **tie WEN[0:7]
+to VGND locally** (each near its own pin) and gate writes with GWEN only: a bit writes when
+GWEN=0 AND WEN[i]=0, so WEN[i]=0 always => full-byte writes gated by GWEN. Then only 2 inverters:
+  CEN  <- ~(ui_in[7])   (chip-select active-high in -> active-low CEN)
+  GWEN <- ~(ui_in[6])   (write-enable active-high in -> active-low GWEN)
+inv cell = gf180mcu_fd_sc_mcu7t5v0__inv_1 (2.24x3.92um; pins I/ZN on Metal1; VDD rail top, VSS
+rail bottom). 4.52um tall incl rails -> does NOT fit the 4.255um bottom margin; place in the
+LEFT margin (full height). Control nets still need horizontal runs in the margin channels (the
+real cost): inv input from top IO (ui_in[6/7] @ x265/273) and output to macro pin (CEN@199,
+GWEN@165, both bottom edge). Route each as M4-vertical-over-macro + one margin-channel horizontal.
+
+## Control-pin x-centers (tile coords, from macro_pins.json)
+CEN=199.09  GWEN=164.95  WEN: [0]=32.98 [1]=67.00 [2]=68.58 [3]=104.80 [4]=239.29 [5]=273.52
+[6]=276.10 [7]=311.32. Macro VSS for ties: bottom M1 rail tile y~5.24..7.255 spanning x~23.5..322.8.
+
 ## TODO (to finish)
 1. **Fix 1 M4-vertical collision**: D[3].ix (236.60) vs D[4].px (236.95), 0.35µm. Nudge the
    TOP-net px vertical with a short M3 jog, or force that net to the BOT channel. (Connectivity
