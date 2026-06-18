@@ -239,5 +239,52 @@ def route(n):
 
 for n in nets: route(n)
 
+# ---------- control signals + ties ----------
+# The SRAM controls are all ACTIVE-LOW, so we expose them directly (no inverters):
+#   GWEN <- ui_in[6]  (active-low write enable: 0 = write this cycle, 1 = read)
+#   CEN  = 0          (chip always enabled)            -> tie to VGND
+#   WEN[0:7] = 0      (all 8 bits write when GWEN=0)   -> tie to VGND
+# CEN/WEN ties land on the macro's own full-width VSS Metal1 bottom rail (tile y~5.24..7.255),
+# directly beneath each Metal2 control pin, via a single Via1 (net-verified VSS landings).
+def tie_pin_to_vss(name):
+    x = pin_xc(name)
+    vwire('M2', x, 5.0, MACRO_PIN_TOP)     # ensure the pin M2 overlaps the VSS M1 rail region
+    via('V1', x, 6.2)                      # Via1: pin Metal2 -> macro VSS Metal1 rail
+for nm in ['CEN'] + [f'WEN[{i}]' for i in range(8)]:
+    tie_pin_to_vss(nm)
+
+# GWEN routed from ui_in[6] on a dedicated Metal1 lane in the via-up band (y=VIAUP_Y): Metal1 is
+# unused by the data routing (M2/M3/M4 only), so it crosses everything without shorting.
+def route_control(io_name, macro_pin):
+    iox = IOX[io_name]; px = pin_xc(macro_pin); y = VIAUP_Y
+    vwire('M4', iox, y, IO_Y)               # IO (M4) down to the band
+    via_stack(['M2','M3','M4'], iox, y)     # M4 -> M3 -> M2
+    via('V1', iox, y)                       # M2 -> M1
+    hwire('M1', iox, px, y)                 # permutation on M1
+    via('V1', px, y)                        # M1 -> M2 at the macro pin column
+    vwire('M2', px, y, MACRO_PIN_TOP)       # M2 up to the macro pin
+route_control('ui_in[6]', 'GWEN')
+
+# ---------- tie unused outputs uio_out[7:0], uio_oe[7:0] = 0 (to VGND) ----------
+# Each is a frame Metal4 pin on the top edge; drop an M4 vertical to the via-up band and join a
+# Metal1 VGND collector that runs back to the VGND stripe. Metal1 is unused by the data routing,
+# and the tie columns clear the data M4 via-ups (nearest is 0.81um away).
+tie_outs = [f'uio_out[{i}]' for i in range(8)] + [f'uio_oe[{i}]' for i in range(8)]
+tie_xs = sorted(IOX[n] for n in tie_outs)
+hwire('M1', 4.8, tie_xs[-1], VIAUP_Y)                 # M1 VGND collector along the band
+via_stack(['M1','M2','M3','M4'], 5.0, VIAUP_Y)        # collector -> VGND M4 stripe (x3..7)
+# Data/control M2 columns to keep the tie via-stacks' M2 patches clear of (>=0.68um center-center).
+m2_cols = sorted(set([n['px'] for n in nets] + [pin_xc('GWEN')]))
+def clear_via_x(x0):
+    for off in (0, -0.7, 0.7, -1.2, 1.2, -1.8, 1.8):
+        if all(abs(x0+off-m) > 0.68 for m in m2_cols): return x0+off
+    return x0
+for n in tie_outs:
+    x = IOX[n]; vdx = clear_via_x(x)
+    vwire('M4', x, VIAUP_Y, IO_Y)                     # M4 down from the pin
+    if abs(vdx-x) > 1e-3: hwire('M4', x, vdx, VIAUP_Y)  # short M4 jog to a clear via column
+    via_stack(['M2','M3','M4'], vdx, VIAUP_Y)         # M4 -> M2 at the clear column
+    via('V1', vdx, VIAUP_Y)                           # M2 -> M1 collector
+
 lib.write_gds('src/%s.gds'%top.name)
 print('wrote gds: macro + boundary + %d io pins + %d data nets routed'%(len(IOX),len(nets)))

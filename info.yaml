@@ -26,8 +26,8 @@ pinout:
   ui[3]: "addr[3]"
   ui[4]: "addr[4]"
   ui[5]: "addr[5]"
-  ui[6]: "we (1=write, 0=read)"
-  ui[7]: "cs (1=enabled, 0=standby)"
+  ui[6]: "we_n (0=write, 1=read)"
+  ui[7]: ""
 
   # Outputs
   uo[0]: "Q[0] read data"
