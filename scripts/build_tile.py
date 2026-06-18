@@ -1,0 +1,195 @@
+#!/usr/bin/env python3
+"""
+Hand-assemble the gf180 64x8 SRAM onto a Tiny Tapeout 1x1 tile as a custom GDS.
+
+Why custom (not OpenLane): the macro fills the tile and blocks Metal1-3 over its
+body, leaving only Metal4 free above it. The macro pin order (bottom edge) vs the
+TT I/O order (top edge) needs ~2831um of horizontal "permutation" routing, which a
+single free layer (M4) cannot carry together with the vertical tracks without shorts.
+Here we do that permutation deliberately in the M1-M3 *edge strips* (top & bottom),
+which the auto-router won't exploit, then run clean vertical M4 tracks over the macro.
+
+Output: gds_src/tt_um_ttcodebot_sram64x8.gds
+"""
+import gdstk, json, os
+
+um = 1.0
+DBU = 0.005
+
+# --- gf180 GDS layers (layer/datatype) ---
+L = {
+    'M1':(34,0),'M2':(36,0),'M3':(42,0),'M4':(46,0),
+    'V1':(35,0),'V2':(38,0),'V3':(40,0),
+    'M1pin':(34,10),'M2pin':(36,10),'M3pin':(42,10),'M4pin':(46,10),
+    'M1lab':(34,10),'M4lab':(46,10),
+    'PRbnd':(0,0),   # PR boundary placeholder (set below)
+}
+PRBND = (63,0)   # gf180 PR_bndry
+
+# --- design rules (um) ---
+RUL = {
+    'M1':dict(w=0.23,s=0.23),'M2':dict(w=0.28,s=0.28),
+    'M3':dict(w=0.28,s=0.28),'M4':dict(w=0.23,s=0.28),
+}
+VIA = {  # cut size, metal enclosure (use the larger directional value all-around for safety)
+    'V1':dict(cut=0.26,enc=0.06,below='M1',above='M2'),
+    'V2':dict(cut=0.28,enc=0.05,below='M2',above='M3'),
+    'V3':dict(cut=0.28,enc=0.05,below='M3',above='M4'),
+}
+WIRE = 0.36          # signal wire width (>= max metal min, room for via enclosure)
+TRK  = 0.66          # horizontal track pitch in the channels
+
+# --- tile / macro geometry (um) ---
+TILE_W, TILE_H = 346.64, 160.72
+MACRO = 'gf180mcu_ocd_ip_sram__sram64x8m8wm1'
+MACRO_W, MACRO_H = 301.3, 152.21
+MX, MY = 22.5, 4.255          # macro lower-left in tile (orientation N)
+IO_Y = 160.22                 # I/O pin row (top edge)
+
+# macro signal pin x-centers (tile coords) from the LEF
+pins = json.load(open(os.path.join(os.path.dirname(__file__),'macro_pins.json')))
+def pin_xc(name):
+    r=[x for x in pins[name]['rects'] if x[0]=='Metal2' and x[2]<5][0]
+    return (r[1]+r[3])/2 + MX
+
+# TT 1x1 I/O pin x-positions (tile coords), all Metal4 at IO_Y
+IOX = {
+ 'clk':331.24,'ena':338.52,'rst_n':323.96,
+ **{f'ui_in[{i}]':x for i,x in enumerate([316.68,309.40,302.12,294.84,287.56,280.28,273.00,265.72])},
+ **{f'uio_in[{i}]':x for i,x in enumerate([258.44,251.16,243.88,236.60,229.32,222.04,214.76,207.48])},
+ **{f'uo_out[{i}]':x for i,x in enumerate([200.20,192.92,185.64,178.36,171.08,163.80,156.52,149.24])},
+ **{f'uio_out[{i}]':x for i,x in enumerate([141.96,134.68,127.40,120.12,112.84,105.56,98.28,91.00])},
+ **{f'uio_oe[{i}]':x for i,x in enumerate([83.72,76.44,69.16,61.88,54.60,47.32,40.04,32.76])},
+}
+
+lib = gdstk.Library(name='ttsram', unit=1e-6, precision=1e-12)
+top = lib.new_cell('tt_um_ttcodebot_sram64x8')
+
+# place macro
+macrolib = gdstk.read_gds('macro/%s/%s.gds'%(MACRO,MACRO))
+macrocell = [c for c in macrolib.cells if c.name==MACRO][0]
+for c in macrolib.cells:
+    lib.add(c)
+top.add(gdstk.Reference(macrocell, (MX, MY)))
+
+# ---------- helpers ----------
+def rect(layer, x1,y1,x2,y2):
+    if x2<x1: x1,x2=x2,x1
+    if y2<y1: y1,y2=y2,y1
+    top.add(gdstk.rectangle((x1,y1),(x2,y2), layer=L[layer][0], datatype=L[layer][1]))
+
+def hwire(layer, x1, x2, yc, w=WIRE):
+    rect(layer, x1, yc-w/2, x2, yc+w/2)
+def vwire(layer, xc, y1, y2, w=WIRE):
+    rect(layer, xc-w/2, y1, xc+w/2, y2)
+
+def via(kind, xc, yc):
+    v=VIA[kind]; c=v['cut']; e=v['enc']
+    half=c/2
+    top.add(gdstk.rectangle((xc-half,yc-half),(xc+half,yc+half), layer=L[kind][0], datatype=L[kind][1]))
+    p=c/2+e
+    for m in (v['below'],v['above']):
+        rect(m, xc-p, yc-p, xc+p, yc+p)
+
+def via_stack(layers, xc, yc):
+    """layers e.g. ['M2','M3','M4'] -> place V2,V3 vias to connect them."""
+    order={'M1':1,'M2':2,'M3':3,'M4':4}
+    for a,b in zip(layers, layers[1:]):
+        k={('M1','M2'):'V1',('M2','M3'):'V2',('M3','M4'):'V3'}[(a,b)]
+        via(k, xc, yc)
+
+# ---------- PR boundary ----------
+top.add(gdstk.rectangle((0,0),(TILE_W,TILE_H), layer=PRBND[0], datatype=PRBND[1]))
+
+# ---------- I/O pins (Metal4 shapes + labels at top edge) ----------
+PIN_W=0.44; PIN_H=1.0
+def io_pin(name):
+    x=IOX[name]
+    rect('M4', x-PIN_W/2, IO_Y-PIN_H/2, x+PIN_W/2, IO_Y+PIN_H/2)
+    top.add(gdstk.Label(name,(x,IO_Y), layer=L['M4pin'][0], texttype=L['M4pin'][1]))
+for nm in IOX: io_pin(nm)
+
+# ---------- channel router for the permutation ----------
+# Net list: (macro_pin, io_name). Data + clk are direct; control via inverters (added later).
+data_nets = []
+for i in range(6):  data_nets.append((f'A[{i}]',  f'ui_in[{i}]'))
+for i in range(8):  data_nets.append((f'D[{i}]',  f'uio_in[{i}]'))
+for i in range(8):  data_nets.append((f'Q[{i}]',  f'uo_out[{i}]'))
+data_nets.append(('CLK','clk'))
+
+# horizontal channel track y-positions (in the free margins). Two layers (M2,M3) per channel.
+BOT_Y = [round(0.55 + k*TRK, 3) for k in range(5)]          # ~0.55..3.19  (below macro y=4.255)
+TOP_Y = [round(157.05 + k*TRK, 3) for k in range(5)]        # ~157.05..159.7 (above macro top 156.465, below IO 160.22)
+MACRO_BOT = MY            # 4.255  (macro signal pins at y 4.255..7.255)
+MACRO_PIN_TOP = MY+3.0    # 7.255
+
+nets = []
+for mp, io in data_nets:
+    px, ix = pin_xc(mp), IOX[io]
+    nets.append(dict(mp=mp, io=io, px=px, ix=ix, lo=min(px,ix), hi=max(px,ix)))
+
+# balance assignment to TOP/BOTTOM by greedy lowest-density
+import math
+def density_at(assigned, x):
+    return sum(1 for n in assigned if n['lo']-0.001<=x<=n['hi']+0.001)
+nets.sort(key=lambda n:-(n['hi']-n['lo']))
+chan={'TOP':[], 'BOT':[]}
+for n in nets:
+    mid=(n['lo']+n['hi'])/2
+    dt=max(density_at(chan['TOP'],x) for x in (n['lo'],mid,n['hi']))
+    db=max(density_at(chan['BOT'],x) for x in (n['lo'],mid,n['hi']))
+    c='TOP' if dt<=db else 'BOT'
+    chan[c].append(n); n['chan']=c
+
+# left-edge track assignment within each channel (per 2 layers M2/M3 interleaved by track index)
+def assign_tracks(members, ntracks):
+    members=sorted(members,key=lambda n:n['lo'])
+    track_end=[-1e9]*ntracks
+    for n in members:
+        placed=False
+        for t in range(ntracks):
+            if n['lo'] > track_end[t]+0.34:
+                n['trk']=t; track_end[t]=n['hi']; placed=True; break
+        if not placed:
+            raise SystemExit(f"channel overflow ({n['chan']}): need more than {ntracks} tracks")
+    return members
+
+NT_BOT=len(BOT_Y)*2  # M2+M3
+NT_TOP=len(TOP_Y)*2
+assign_tracks(chan['BOT'], NT_BOT)
+assign_tracks(chan['TOP'], NT_TOP)
+print('split: TOP=%d BOT=%d  (tracks avail T=%d B=%d)'%(len(chan['TOP']),len(chan['BOT']),NT_TOP,NT_BOT))
+
+def track_yz(channel, t):
+    """track index -> (y, horizontal layer). even idx -> M3, odd -> M2."""
+    ys = TOP_Y if channel=='TOP' else BOT_Y
+    layer = 'M3' if t%2==0 else 'M2'
+    return ys[t//2], layer
+
+def route(n):
+    px, ix = n['px'], n['ix']; t=n['trk']
+    y, hlay = track_yz(n['chan'], t)
+    if n['chan']=='BOT':
+        # macro pin (M2) down to track y, horizontal to ix, up M4 to IO
+        vwire('M2', px, y-WIRE/2, MACRO_PIN_TOP)              # M2 from pin down to track
+        if hlay=='M3': via_stack(['M2','M3'], px, y)
+        hwire(hlay, px, ix, y)
+        # up to M4 at ix
+        if hlay=='M3': via_stack(['M3','M4'], ix, y)
+        else: via_stack(['M2','M3','M4'], ix, y)
+        vwire('M4', ix, y, IO_Y)
+    else:  # TOP
+        # macro pin (M2) up to M4 at px, M4 vertical to top track region, horizontal to ix, to IO
+        via_stack(['M2','M3','M4'], px, MACRO_BOT+1.5)
+        vwire('M4', px, MACRO_BOT+1.5, y)
+        if hlay=='M3': via_stack(['M3','M4'], px, y)
+        else: via_stack(['M2','M3','M4'], px, y)
+        hwire(hlay, px, ix, y)
+        if hlay=='M3': via_stack(['M3','M4'], ix, y)
+        else: via_stack(['M2','M3','M4'], ix, y)
+        vwire('M4', ix, y, IO_Y)
+
+for n in nets: route(n)
+
+lib.write_gds('gds_src/%s.gds'%top.name)
+print('wrote gds: macro + boundary + %d io pins + %d data nets routed'%(len(IOX),len(nets)))
