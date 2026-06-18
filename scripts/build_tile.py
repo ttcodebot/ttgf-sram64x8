@@ -112,7 +112,7 @@ def via_stack(layers, xc, yc):
 top.add(gdstk.rectangle((0,0),(TILE_W,TILE_H), layer=PRBND[0], datatype=PRBND[1]))
 
 # ---------- I/O pins (Metal4 shapes + labels at top edge) ----------
-PIN_W=0.44; PIN_H=1.0
+PIN_W=0.30; PIN_H=1.0   # MUST match the frame DEF pin dims (Metal4 -300 -1000 .. 300 1000 DBU)
 def io_pin(name):
     x=IOX[name]
     rect('M4', x-PIN_W/2, IO_Y-PIN_H/2, x+PIN_W/2, IO_Y+PIN_H/2)

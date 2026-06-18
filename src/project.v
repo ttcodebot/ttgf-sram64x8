@@ -25,6 +25,8 @@
 `default_nettype none
 
 module tt_um_ttcodebot_sram64x8 (
+    input  wire       VGND,     // ground (connected to the macro VSS in the GDS)
+    input  wire       VDPWR,    // 3.3V core power (connected to the macro VDD in the GDS)
     input  wire [7:0] ui_in,    // address[5:0], we_n, unused
     output wire [7:0] uo_out,   // read data Q[7:0]
     input  wire [7:0] uio_in,   // write data D[7:0]
