@@ -20,6 +20,18 @@ margins) which the auto-router won't use, then run clean vertical M4 tracks over
   to 0.005µm grid. Output: `gds_src/tt_um_ttcodebot_sram64x8.gds`.
 - Local KLayout signoff DRC clean except precheck-excluded density (M*.4/PL.8) — see below.
 
+## Current DRC state (data nets only, local KLayout signoff)
+Down to ~40 real violations, ALL `M3.2a` (Metal3 spacing 0.28) + a few `M2.2a` — the rest are
+precheck-excluded density. M3.3 (min-area) and via-size/off-grid are FIXED (wire/patch 0.40um,
+exact 0.26 via cut, grid snap, track pitch 0.70). The remaining M3.2a are a **packing problem
+in the ~3.5um bottom margin**: the 13 TOP-channel nets each need an M2->M4 via-up (which makes
+an isolated M3 patch) near the macro's bottom edge, and those patches crowd the 5 BOT-channel
+M3 horizontal tracks + each other. Fix ideas:
+- Route the leftmost/rightmost nets up the **22um-wide SIDE margins** (M1-M4 all free) instead
+  of the bottom channel, to relieve bottom congestion (best structural fix).
+- Or add M1 as a 3rd bottom-channel layer and reserve M3-clear lanes for the via-ups.
+- Or stagger the TOP via-up y per net so their 0.40 M3 patches don't come within 0.28.
+
 ## TODO (to finish)
 1. **Fix 1 M4-vertical collision**: D[3].ix (236.60) vs D[4].px (236.95), 0.35µm. Nudge the
    TOP-net px vertical with a short M3 jog, or force that net to the BOT channel. (Connectivity

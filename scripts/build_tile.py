@@ -31,16 +31,16 @@ RUL = {
     'M1':dict(w=0.23,s=0.23),'M2':dict(w=0.28,s=0.28),
     'M3':dict(w=0.28,s=0.28),'M4':dict(w=0.23,s=0.28),
 }
-VIA = {  # gf180 via cuts are EXACTLY 0.26um; metal enclosure 0.05 all-around (>=0.34 width rule)
-    'V1':dict(cut=0.26,enc=0.06,below='M1',above='M2'),
-    'V2':dict(cut=0.26,enc=0.05,below='M2',above='M3'),
-    'V3':dict(cut=0.26,enc=0.05,below='M3',above='M4'),
+VIA = {  # gf180 via cuts are EXACTLY 0.26um; enclosure 0.07 -> 0.40 patch (>= M3 min-area 0.1444)
+    'V1':dict(cut=0.26,enc=0.07,below='M1',above='M2'),
+    'V2':dict(cut=0.26,enc=0.07,below='M2',above='M3'),
+    'V3':dict(cut=0.26,enc=0.07,below='M3',above='M4'),
 }
 GRID = 0.005
 def g(v):  # snap to manufacturing grid
     return round(round(v/GRID)*GRID, 3)
-WIRE = 0.36          # signal wire width (>= max metal min, room for via enclosure)
-TRK  = 0.66          # horizontal track pitch in the channels
+WIRE = 0.40          # signal wire width (= via patch, no notch; M3 min-area ok)
+TRK  = 0.70          # horizontal track pitch (0.40 wire + 0.30 space > 0.28)
 
 # --- tile / macro geometry (um) ---
 TILE_W, TILE_H = 346.64, 160.72
@@ -123,8 +123,8 @@ for i in range(8):  data_nets.append((f'Q[{i}]',  f'uo_out[{i}]'))
 data_nets.append(('CLK','clk'))
 
 # horizontal channel track y-positions (in the free margins). Two layers (M2,M3) per channel.
-BOT_Y = [round(0.55 + k*TRK, 3) for k in range(5)]          # ~0.55..3.19  (below macro y=4.255)
-TOP_Y = [round(157.05 + k*TRK, 3) for k in range(5)]        # ~157.05..159.7 (above macro top 156.465, below IO 160.22)
+BOT_Y = [round(0.55 + k*TRK, 3) for k in range(5)]          # 0.55..3.35  (below macro y=4.255)
+TOP_Y = [round(157.0 + k*TRK, 3) for k in range(5)]         # 157.0..159.8 (above macro top 156.465, below IO 160.22)
 MACRO_BOT = MY            # 4.255  (macro signal pins at y 4.255..7.255)
 MACRO_PIN_TOP = MY+3.0    # 7.255
 
@@ -184,9 +184,12 @@ def route(n):
         else: via_stack(['M2','M3','M4'], ix, y)
         vwire('M4', ix, y, IO_Y)
     else:  # TOP
-        # macro pin (M2) up to M4 at px, M4 vertical to top track region, horizontal to ix, to IO
-        via_stack(['M2','M3','M4'], px, MACRO_BOT+1.5)
-        vwire('M4', px, MACRO_BOT+1.5, y)
+        # macro pin (M2) down into the bottom MARGIN (clear of macro M3 fingers), stack up to M4,
+        # then M4 vertical over the whole macro to the top track region, horizontal to ix, to IO.
+        ystk = 3.9   # bottom margin, above BOT tracks (<=3.35), below macro (4.255)
+        vwire('M2', px, ystk, MACRO_PIN_TOP)
+        via_stack(['M2','M3','M4'], px, ystk)
+        vwire('M4', px, ystk, y)
         if hlay=='M3': via_stack(['M3','M4'], px, y)
         else: via_stack(['M2','M3','M4'], px, y)
         hwire(hlay, px, ix, y)
